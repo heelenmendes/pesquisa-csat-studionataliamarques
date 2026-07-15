@@ -1,0 +1,87 @@
+// 1) E-mail que deve receber o alerta de nota baixa (Substitua na sua aplicação real)
+const EMAIL_ALERTA = 'seu-email-aqui@gmail.com';
+
+/**
+ * Roda UMA VEZ para criar as abas "Respostas" e "Indicações" com os cabeçalhos.
+ */
+function configurarPlanilha() {
+  const planilha = SpreadsheetApp.getActiveSpreadsheet();
+
+  let abaRespostas = planilha.getSheetByName('Respostas');
+  if (!abaRespostas) abaRespostas = planilha.insertSheet('Respostas');
+  if (abaRespostas.getLastRow() === 0) {
+    abaRespostas.appendRow([
+      'Data/Hora', 'NPS', 'Ambiente', 'Localização', 'Atendimento',
+      'Tempo de Manutenção', 'Sugestão',
+      'Amiga 1 - Nome', 'Amiga 1 - WhatsApp',
+      'Amiga 2 - Nome', 'Amiga 2 - WhatsApp'
+    ]);
+    abaRespostas.getRange(1, 1, 1, 11).setFontWeight('bold');
+  }
+
+  let abaIndicacoes = planilha.getSheetByName('Indicações');
+  if (!abaIndicacoes) abaIndicacoes = planilha.insertSheet('Indicações');
+  if (abaIndicacoes.getLastRow() === 0) {
+    abaIndicacoes.appendRow([
+      'Nome', 'WhatsApp', 'Indicada em', 'NPS de quem indicou', 'Contatada?'
+    ]);
+    abaIndicacoes.getRange(1, 1, 1, 5).setFontWeight('bold');
+  }
+
+  Logger.log('Planilha configurada com sucesso!');
+}
+
+// 1. Função obrigatória do Google para exibir a página web
+function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Pesquisa de Satisfação')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// 2. Nova função que será chamada "por dentro" do HTML via google.script.run
+function salvarRespostas(dados) {
+  try {
+    const planilha = SpreadsheetApp.getActiveSpreadsheet();
+    const abaRespostas = planilha.getSheetByName('Respostas');
+    const abaIndicacoes = planilha.getSheetByName('Indicações');
+    const agora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+
+    // Salva as respostas
+    abaRespostas.appendRow([
+      agora,
+      dados.nps_score || '',
+      dados.ambiente || '',
+      dados.localizacao || '',
+      dados.atendimento || '',
+      dados.tempo_manutencao || '',
+      dados.sugestao || '',
+      dados.amiga1_nome || '',
+      dados.amiga1_whatsapp || '',
+      dados.amiga2_nome || '',
+      dados.amiga2_whatsapp || ''
+    ]);
+
+    // Salva as indicações
+    if (dados.amiga1_nome) {
+      abaIndicacoes.appendRow([dados.amiga1_nome, dados.amiga1_whatsapp || '', agora, dados.nps_score || '', 'Não']);
+    }
+    if (dados.amiga2_nome) {
+      abaIndicacoes.appendRow([dados.amiga2_nome, dados.amiga2_whatsapp || '', agora, dados.nps_score || '', 'Não']);
+    }
+
+    // Alerta de nota baixa
+    if (Number(dados.nps_score) <= 6 && EMAIL_ALERTA !== 'seu-email-aqui@gmail.com') {
+      MailApp.sendEmail({
+        to: EMAIL_ALERTA,
+        subject: '⚠️ Nota baixa na pesquisa de satisfação',
+        body: 'Uma cliente respondeu a pesquisa com nota ' + dados.nps_score + ' de 10.\n\n' +
+              'Sugestão dela: ' + (dados.sugestao || '(não escreveu nada)')
+      });
+    }
+
+    return true; 
+    
+  } catch (erro) {
+    throw new Error(erro.toString()); 
+  }
+}
